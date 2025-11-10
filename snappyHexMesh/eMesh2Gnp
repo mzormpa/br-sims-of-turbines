@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# emesh2gnp: extract the //points: block from OpenFOAM .eMesh into .gnp (x y z)
+# Usage: emesh2gnp file1.eMesh [file2.eMesh ...]
+set -euo pipefail
+
+if [ "$#" -lt 1 ]; then
+  echo "Usage: $(basename "$0") file1.eMesh [file2.eMesh ...]" >&2
+  exit 1
+fi
+
+for f in "$@"; do
+  if [ ! -f "$f" ]; then
+    echo "Skipping '$f' (not a file)" >&2
+    continue
+  fi
+
+  out="${f%.*}.gnp"
+
+  # Parse the points section:
+  awk '
+    BEGIN { inpoints=0; stage=0; remaining=-1 }
+
+    # Find the "//points:" line (allow spaces, case-insensitive)
+    {
+      line=$0
+      low=line; gsub(/[A-Z]/, "", low); # crude tolower for POSIX awk: remove uppercase then compare patterns
+    }
+    tolower($0) ~ /^[[:space:]]*\/\/[[:space:]]*points[[:space:]]*:/ {
+      inpoints=1; stage=1; next
+    }
+
+    # After //points:, skip blank lines until we read the integer count
+    inpoints && stage==1 {
+      if ($0 ~ /^[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/) {
+        remaining=$1+0
+        stage=2
+        next
+      }
+      # Some files may have "(" immediately; handle gracefully
+      if ($0 ~ /\(/) { stage=3 }
+    }
+
+    # Wait for the opening "(" line
+    inpoints && stage==2 {
+      if ($0 ~ /\(/) { stage=3 }
+      next
+    }
+
+    # Read N lines like: (x y z) until we close or hit count
+    inpoints && stage==3 {
+      # End of points block?
+      if ($0 ~ /^[[:space:]]*\)/) { inpoints=0; stage=0; exit }
+      # Extract numbers inside the first (...) on the line
+      if (match($0, /\(([^\)]*)\)/, m)) {
+        s=m[1]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+        gsub(/[[:space:]]+/, " ", s)
+        print s
+        if (remaining > 0) {
+          remaining--
+          if (remaining==0) { inpoints=0; stage=0; exit }
+        }
+      }
+      next
+    }
+  ' "$f" > "$out"
+
+  if [ ! -s "$out" ]; then
+    echo "Warning: wrote no points for '$f' -> '$out' (did it contain //points: ?)" >&2
+  else
+    echo "Wrote points: '$out'"
+  fi
+done
+

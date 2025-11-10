@@ -1,0 +1,114 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2406                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+radius 0.043;
+
+xMin -1.9;
+xMax  3.3;
+
+yMin   #eval{-1.2*$radius};
+yMax     #eval{1.2*$radius};
+
+zMin     0;
+//zMin     #eval{-1.2*$radius};
+zMax     #eval{$radius};
+
+
+vertices
+(
+
+    ($xMin  0     							  0 ) // 0 
+    ($xMax  0     							  0 ) // 1
+
+    ($xMax  #eval{ cos(degToRad(30))*$radius} #eval{sin(degToRad(30))*$radius})  // 2
+    ($xMin  #eval{ cos(degToRad(30))*$radius} #eval{sin(degToRad(30))*$radius})  // 3
+
+    ($xMin  #eval{-cos(degToRad(30))*$radius} #eval{sin(degToRad(30))*$radius})  // 4
+    ($xMax  #eval{-cos(degToRad(30))*$radius} #eval{sin(degToRad(30))*$radius})  // 5
+
+    ($xMax  0 								  $radius) // 6
+    ($xMin  0 								  $radius) // 7
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (5 50 50) simpleGrading (1 1 1)
+    //hex (0 1 2 3 4 5 6 7) (10 100 100) simpleGrading (1 1 1)
+);
+
+edges
+(
+	arc 4 7 ($xMin #eval{-cos(degToRad(60))*$radius} #eval{sin(degToRad(60))*$radius}) 
+	arc 5 6 ($xMax #eval{-cos(degToRad(60))*$radius} #eval{sin(degToRad(60))*$radius}) 
+
+	arc 7 3 ($xMin #eval{cos(degToRad(60))*$radius} #eval{sin(degToRad(60))*$radius}) 
+	arc 6 2 ($xMax #eval{cos(degToRad(60))*$radius} #eval{sin(degToRad(60))*$radius}) 
+
+);
+
+boundary
+(
+    inlet
+    {
+        type patch;
+        faces
+        (
+            (0 4 7 3)
+        );
+    }
+
+    outlet
+    {
+        type patch;
+        faces
+        (
+            (2 6 5 1)
+        );
+    }
+
+    extrudedNacelle
+    {
+        type symmetry;
+        faces
+        (
+            (3 7 6 2)
+            (4 5 6 7)
+        );
+    }
+
+	cyclic1
+    {
+        type symmetry;
+        faces
+        (
+            (1 5 4 0)
+        );
+    }
+    cyclic2
+    {
+        type symmetry;
+        faces
+        (
+            (0 3 2 1)
+        );
+    }
+
+);
+
+
+// ************************************************************************* //

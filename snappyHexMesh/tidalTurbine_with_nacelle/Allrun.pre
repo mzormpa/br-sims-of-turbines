@@ -1,0 +1,128 @@
+#!/bin/sh
+cd "${0%/*}" || exit                                # Run from this directory
+. ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions        # Tutorial run functions
+#------------------------------------------------------------------------------
+check_file_end() {
+  filename="$1"
+  
+  # Check if the file exists and is not empty
+  if [ ! -s "$filename" ]; then
+    echo "$filename is empty or does not exist."
+    return 1
+  fi
+  
+  # Get the second-to-last line (ignores the empty last line)
+  second_to_last_line=$(tail -n 2 "$filename" | head -n 1)
+  
+  # Check if the second-to-last line ends with 'End'
+  if [[ "$second_to_last_line" == *End ]]; then
+    echo -e "\t\033[32mSUCCESS:\033[0m $filename ends with 'End'!"
+  else
+    echo -e "\t\033[31mWARNING:\033[0m $filename last line before empty does not end with 'End'."
+  fi
+}
+
+
+# ==================================================== #
+#     STEP 1 : generate features for outer domain      #
+# ==================================================== #
+
+echo " *** Generate blockMesh to extract its nice features"
+cp system/blockMeshDict_featureAngle system/blockMeshDict
+
+runApplication blockMesh            | awk '{ print "\t" $0 }'
+mv log.blockMesh log.blockMesh_featureAngle #
+check_file_end	 log.blockMesh_featureAngle #
+
+echo " *** Creating STL of blockmesh using surfaceMeshExtract"
+mkdir constant/triSurface
+
+runApplication surfaceMeshExtract  constant/triSurface/background.stl  | awk '{ print "\t" $0 }'
+mv log.surfaceMeshExtract log.surfaceMeshExtract_bg
+check_file_end	 		  log.surfaceMeshExtract_bg
+
+runApplication surfaceMeshExtract  -patches '(shroud)'  constant/triSurface/shroud.stl  | awk '{ print "\t" $0 }'
+mv log.surfaceMeshExtract log.surfaceMeshExtract_shroud
+check_file_end	 		  log.surfaceMeshExtract_shroud
+
+runApplication surfaceMeshExtract  -patches '(cyclic1)'   constant/triSurface/cyclic1.stl  | awk '{ print "\t" $0 }'
+mv log.surfaceMeshExtract log.surfaceMeshExtract_cyclic1
+check_file_end	 		  log.surfaceMeshExtract_cyclic1
+
+runApplication surfaceMeshExtract  -patches '(cyclic2)'    constant/triSurface/cyclic2.stl  | awk '{ print "\t" $0 }'
+mv log.surfaceMeshExtract log.surfaceMeshExtract_cyclic2
+check_file_end	 		  log.surfaceMeshExtract_cyclic2
+
+echo " *** Extracting Features "
+cp system/surfaceFeatureExtractDict_bg system/surfaceFeatureExtractDict
+runApplication surfaceFeatureExtract   | awk '{ print "\t" $0 }'
+mv log.surfaceFeatureExtract log.surfaceFeatureExtract_bg
+check_file_end               log.surfaceFeatureExtract_bg
+
+cd constant/triSurface
+../../../eMesh2Gnp background.eMesh
+cd ../..
+
+# ============================================ #
+#  STEP 2 : generate the background mesh (box) #
+# ============================================ #
+
+echo " *** Generate blockMesh for the main domain"
+cp system/blockMeshDict_box system/blockMeshDict
+runApplication blockMesh  | awk '{ print "\t" $0 }'
+mv log.blockMesh log.blockMesh_box
+check_file_end   log.blockMesh_box
+
+runApplication foamToEnsight   | awk '{ print "\t" $0 }'
+mv EnSight EnSight_box
+mv log.foamToEnsight log.foamToEnsight_box
+check_file_end   	 log.foamToEnsight_box
+#
+## ========================== #
+##  STEP 3 : add the turbine  #
+## ========================== #
+
+cp -r ../triSurface/blade0.stl           constant/triSurface/.
+cp -r ../triSurface/nacelle_xAxis_new_fillet_1.stl    constant/triSurface/nacelle_xAxis.stl
+
+
+echo " *** Create turbine features"
+
+cp system/surfaceFeatureExtractDict_turbine system/surfaceFeatureExtractDict
+runApplication surfaceFeatureExtract   | awk '{ print "\t" $0 }'
+mv log.surfaceFeatureExtract log.surfaceFeatureExtract_turbine
+check_file_end               log.surfaceFeatureExtract_turbine
+
+cd  constant/triSurface
+../../../eMesh2Gnp cyclic1_hub_intersection.eMesh
+../../../eMesh2Gnp cyclic2_hub_intersection.eMesh
+../../../eMesh2Gnp blade0_hub_intersection.eMesh
+../../../eMesh2Gnp blade0.eMesh
+../../../eMesh2Gnp nacelle_xAxis.eMesh
+cd ../../
+
+decomposePar   > log.decomposePar 
+mv log.decomposePar log.decomposePar_turbine
+check_file_end      log.decomposePar_turbine
+cp system/snappyHexMeshDict_turbine system/snappyHexMeshDict
+runParallel snappyHexMesh -overwrite  -parallel
+mv log.snappyHexMesh log.snappyHexMesh_turbine
+check_file_end		 log.snappyHexMesh_turbine
+
+runApplication reconstructParMesh -constant  | awk '{ print "\t" $0 }'
+mv log.reconstructParMesh log.reconstructParMesh_turbine
+check_file_end            log.reconstructParMesh_turbine
+
+runApplication foamToEnsight  | awk '{ print "\t" $0 }'
+mv log.foamToEnsight log.foamToEnsight_turbine
+check_file_end       log.foamToEnsight_turbine
+mv EnSight EnSight_turbine
+
+runApplication checkMesh
+cat log.checkMesh
+
+foamToVTK -faceSet skewFaces -ascii
+/home/markella/Desktop/DPhil/misc/vtp2Gnp  VTK/face-set/skewFaces/skewFaces_0.vtp
+
+
+###------------------------------------------------------------------------------

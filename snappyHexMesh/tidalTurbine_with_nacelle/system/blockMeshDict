@@ -1,0 +1,117 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2406                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+radius 1.05;
+
+nCellsPerMeter   35;
+
+xMin     -1.9;
+xMax     3.3;
+
+yMin   #eval{-1.2*$radius};
+yMax     #eval{1.2*$radius};
+
+zMin     0;
+//zMin     #eval{-1.2*$radius};
+zMax     #eval{1.2*$radius};
+
+nx    #eval{floor(($xMax-$xMin)*$nCellsPerMeter)};
+ny    #eval{floor(($yMax-$yMin)*$nCellsPerMeter)};
+nz    #eval{floor(($zMax-$zMin)*$nCellsPerMeter)};
+
+vertices
+(
+    ($xMin  $yMin $zMin)
+    ($xMax  $yMin $zMin)
+    ($xMax  $yMax $zMin)
+    ($xMin  $yMax $zMin)
+    ($xMin  $yMin $zMax)
+    ($xMax  $yMin $zMax)
+    ($xMax  $yMax $zMax)
+    ($xMin  $yMax $zMax)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) ($nx $ny $nz) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    inlet
+    {
+        type patch;
+        faces
+        (
+            (0 4 7 3)
+        );
+    }
+
+    outlet
+    {
+        type patch;
+        faces
+        (
+            (2 6 5 1)
+        );
+    }
+
+    right
+    {
+        type symmetry;
+        faces
+        (
+            (1 5 4 0)
+        );
+    }
+
+    left
+    {
+        type symmetry;
+        faces
+        (
+            (3 7 6 2)
+        );
+    }
+
+	top
+    {
+        type symmetry;
+        faces
+        (
+            (4 5 6 7)
+        );
+    }
+
+    bottom
+    {
+        type symmetry;
+        faces
+        (
+            (0 3 2 1)
+        );
+    }
+
+);
+
+
+// ************************************************************************* //
